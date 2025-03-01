@@ -1,27 +1,44 @@
-[BITS 16]          ; Mode réel (16-bit)
-[ORG 0x7C00]       ; L'adresse où le BIOS charge le bootloader
+[BITS 16]
+[ORG 0x7C00]
 
 start:
-                   ; Afficher un message
-    mov si, msg    ; Charger l'adresse du message
-    call print     ; Appeler la fonction d'affichage
+    cli                     ; Désactiver les interruptions
+    lgdt [gdt_descriptor]    ; Charger la GDT
+    mov eax, cr0
+    or eax, 1
+    mov cr0, eax            ; Activer le mode protégé
+    jmp CODE_SEG:init_pm    ; Sauter en mode protégé
 
-    jmp $          ; Boucle infinie (attend un redémarrage)
+; ---------------- Mode protégé ----------------
+[BITS 32]
+init_pm:
+    mov ax, DATA_SEG
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    mov esp, 0x90000        ; Initialiser la pile
+    call kernel_main        ; Appeler le kernel (chargé en mémoire)
 
-; Fonction d'affichage d'une chaîne de caractères
-print:
-    mov ah, 0x0E   ; Fonction BIOS : affichage de texte
-.loop:
-    lodsb          ; Charger le prochain caractère dans AL
-    cmp al, 0      ; Vérifier la fin de chaîne (NULL)
-    je done        ; Si terminé, retourner
-    int 0x10       ; Afficher le caractère
-    jmp .loop      ; Continuer la boucle
-done:
-    ret
+hang:
+    jmp hang                ; Boucle infinie
 
-msg db "Hello, OS World!", 0  ; Message terminé par NULL
+; ---------------- GDT (Global Descriptor Table) ----------------
+gdt_start:
+    dq 0                    ; Null descriptor
+gdt_code:
+    dw 0xFFFF, 0x0000, 0x9A00, 0x00CF  ; Code segment (exécutable)
+gdt_data:
+    dw 0xFFFF, 0x0000, 0x9200, 0x00CF  ; Data segment (lecture/écriture)
+gdt_end:
 
-; Remplir jusqu'à 512 octets (taille d'un secteur de boot)
+gdt_descriptor:
+    dw gdt_end - gdt_start - 1  ; Taille de la GDT
+    dd gdt_start                ; Adresse de la GDT
+
+CODE_SEG equ gdt_code - gdt_start
+DATA_SEG equ gdt_data - gdt_start
+
 times 510-($-$$) db 0
-dw 0xAA55  ; Signature de boot (obligatoire)
+dw 0xAA55
