@@ -4,7 +4,7 @@
 kernel_main:
     mov esi, msg
     call print
-    hlt                      ; Stop CPU
+    hlt                      
 
 print:
     mov ah, 0x0E
